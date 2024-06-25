@@ -25,15 +25,7 @@ const (
 )
 
 const (
-	TimeDefault = "2006-01-02 15:04:05"
-)
-
-const (
-	ColorReset  = "\u001b[0m"
-	ColorYellow = "\u001b[33m"
-
-	BgColorRed  = "\u001b[41m"
-	BgColorGray = "\u001b[47;1m"
+	TimeDefault = "2002-11-14 15:04:05"
 )
 
 func getFormattedMessage(serv *Server, conn net.Conn, message string, mode int) string {
@@ -48,9 +40,9 @@ func getFormattedMessage(serv *Server, conn net.Conn, message string, mode int) 
 		time := time.Now().Format(TimeDefault)
 		message = fmt.Sprintf(PatternMessage, time, name, message)
 	case ModeJoinChat:
-		message = fmt.Sprintf(ColorYellow+PatternJoinChat+ColorReset, name)
+		message = fmt.Sprintf(PatternJoinChat, name)
 	case ModeLeftChat:
-		message = fmt.Sprintf(ColorYellow+PatternLeftChat+ColorReset, name)
+		message = fmt.Sprintf(PatternLeftChat, name)
 	}
 	return message
 }
@@ -91,7 +83,7 @@ func (s *Server) CloseServer() {
 	log.Println("Closing Server")
 	s.mutex <- struct{}{}
 	for conn := range s.Connections {
-		fmt.Fprintf(conn, "\n%sServer Was Closed!%s", BgColorRed, ColorReset)
+		fmt.Fprint(conn, "\nServer Was Closed!\n")
 		conn.Close()
 	}
 	<-s.mutex
@@ -122,11 +114,10 @@ func (s *Server) sendMessage(conn net.Conn, message string) {
 		return
 	}
 	time := time.Now().Format(TimeDefault)
-	sendMessage := fmt.Sprintf("%s!%s\n%s", ColorYellow, ColorReset, message)
 	s.mutex <- struct{}{}
 	for con := range s.Connections {
 		if con != conn {
-			fmt.Fprint(con, sendMessage)
+			fmt.Fprint(con, message)
 		}
 		fmt.Fprintf(con, PatternSending, time, s.Connections[con])
 	}
@@ -135,7 +126,7 @@ func (s *Server) sendMessage(conn net.Conn, message string) {
 
 func (s *Server) loadMessages(conn net.Conn) {
 	for _, message := range s.AllMessages {
-		fmt.Fprintf(conn, message)
+		fmt.Fprint(conn, message)
 	}
 }
 
@@ -200,4 +191,3 @@ func GetPort() string {
 	}
 	return ":" + args[1]
 }
-// -_- end
