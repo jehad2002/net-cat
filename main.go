@@ -10,6 +10,15 @@ import (
 	"time"
 )
 
+type Server struct {
+	Server         net.Listener
+	Connections    map[net.Conn]string
+	UsedNames      map[string]bool
+	MaxConnections int
+	AllMessages    []string
+	mutex          chan struct{}
+}
+
 const (
 	WelcomeMessage  = "Welcome to TCP-Chat!\n         _nnnn_\n        dGGGGMMb\n       @p~qp~~qMb\n       M|@||@) M|\n       @,----.JM|\n      JS^\\__/  qKL\n     dZP        qKRb\n    dZP          qKKb\n   fZP            SMMb\n   HZM            MMMM\n   FqM            MMMM\n __| \".        |\\dS\"qML\n |    `.       | `' \\Zq\n_)      \\.___.,|     .'\n\\____   )MMMMMP|   .'\n     `-'       `--'\n[ENTER YOUR NAME]: "
 	PatternSending  = "[%v][%v]:"
@@ -155,15 +164,6 @@ func (s *Server) removeConnection(conn net.Conn) {
 	delete(s.Connections, conn)
 	log.Printf("%s has left our chat...\n", name)
 	<-s.mutex
-}
-
-type Server struct {
-	Server         net.Listener
-	Connections    map[net.Conn]string
-	UsedNames      map[string]bool
-	MaxConnections int
-	AllMessages    []string
-	mutex          chan struct{}
 }
 
 func main() {
