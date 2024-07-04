@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	TimeDefault = "2002-11-14 15:04:05"
+	TimeDefault = "2006-01-02 15:04:05"
 )
 
 func getFormattedMessage(serv *Server, conn net.Conn, message string, mode int) string {
