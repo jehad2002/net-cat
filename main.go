@@ -17,10 +17,11 @@ type Server struct {
 	MaxConnections int
 	AllMessages    []string
 	mutex          chan struct{}
+	ShutdownChan   chan bool
 }
 
 const (
-	WelcomeMessage  = "Welcome to TCP-Chat!\n         _nnnn_\n        dGGGGMMb\n       @p~qp~~qMb\n       M|@||@) M|\n       @,----.JM|\n      JS^\\__/  qKL\n     dZP        qKRb\n    dZP          qKKb\n   fZP            SMMb\n   HZM            MMMM\n   FqM            MMMM\n __| \".        |\\dS\"qML\n |    `.       | `' \\Zq\n_)      \\.___.,|     .'\n\\____   )MMMMMP|   .'\n     `-'       `--'\n[ENTER YOUR NAME]: "
+	WelcomeMessage  = "Welcome to TCP-Chat!\n         _nnnn_\n        dGGGGMMb\n       @p~qp~~qMb\n       M|@||@) M|\n       @,----.JM|\n      JS^\\__/  qKL\n     dZP        qKRb\n    dZP          qKKb\n   fZP            SMMb\n   HZM            MMMM\n   FqM            MMMM\n __| \".        |\\dS\"qML\n |    .       | ' \\Zq\n_)      \\.___.,|     .'\n\\____   )MMMMMP|   .'\n     -'       --'\n[ENTER YOUR NAME]: "
 	PatternSending  = "[%v][%v]:"
 	PatternMessage  = "[%v][%s]: %s"
 	PatternJoinChat = "%s has joined our chat...\n"
@@ -46,8 +47,8 @@ func getFormattedMessage(serv *Server, conn net.Conn, message string, mode int) 
 		if message == "\n" {
 			return ""
 		}
-		time := time.Now().Format(TimeDefault)
-		message = fmt.Sprintf(PatternMessage, time, name, message)
+		currentTime := time.Now().Format(TimeDefault)
+		message = fmt.Sprintf(PatternMessage, currentTime, name, message)
 	case ModeJoinChat:
 		message = fmt.Sprintf(PatternJoinChat, name)
 	case ModeLeftChat:
@@ -63,6 +64,7 @@ func (s *Server) Constructor(port string, maxConn int) {
 	s.Connections = make(map[net.Conn]string, maxConn)
 	s.UsedNames = make(map[string]bool, maxConn)
 	s.mutex = make(chan struct{}, 1)
+	s.ShutdownChan = make(chan bool)
 }
 
 func (s *Server) CanConnect(conn net.Conn) bool {
@@ -109,6 +111,13 @@ func (s *Server) startChatting(conn net.Conn) {
 		if err != nil {
 			break
 		}
+
+		if strings.HasPrefix(message, "/name ") {
+			newName := strings.TrimSpace(strings.TrimPrefix(message, "/name "))
+			s.changeUserName(conn, newName)
+			continue
+		}
+
 		message = getFormattedMessage(s, conn, message, ModeSendMessage)
 		s.sendMessage(conn, message)
 		s.saveMessage(message)
@@ -122,13 +131,13 @@ func (s *Server) sendMessage(conn net.Conn, message string) {
 		fmt.Fprintf(conn, PatternSending, time.Now().Format(TimeDefault), s.Connections[conn])
 		return
 	}
-	time := time.Now().Format(TimeDefault)
+	currentTime := time.Now().Format(TimeDefault)
 	s.mutex <- struct{}{}
 	for con := range s.Connections {
 		if con != conn {
 			fmt.Fprint(con, message)
 		}
-		fmt.Fprintf(con, PatternSending, time, s.Connections[con])
+		fmt.Fprintf(con, PatternSending, currentTime, s.Connections[con])
 	}
 	<-s.mutex
 }
@@ -166,20 +175,52 @@ func (s *Server) removeConnection(conn net.Conn) {
 	<-s.mutex
 }
 
+func (s *Server) changeUserName(conn net.Conn, newName string) {
+	s.mutex <- struct{}{}
+	defer func() { <-s.mutex }()
+	if newName == "" || s.UsedNames[newName] {
+		fmt.Fprint(conn, "Name is either empty or already in use.\n")
+		return
+	}
+	oldName := s.Connections[conn]
+	delete(s.UsedNames, oldName)
+	s.UsedNames[newName] = true
+	s.Connections[conn] = newName
+	log.Printf("%s changed their name to %s\n", oldName, newName)
+	message := fmt.Sprintf("%s changed their name to %s\n", oldName, newName)
+	s.sendMessage(conn, message)
+}
+
+func (s *Server) WaitForExitCommand() {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		command, _ := reader.ReadString('\n')
+		if strings.TrimSpace(command) == "exit" {
+			s.ShutdownChan <- true
+			return
+		}
+	}
+}
+
 func main() {
 	port := GetPort()
 	server := &Server{}
 	server.Constructor(port, 0)
 	fmt.Printf("Listening on the port %v\n", port)
 
-	for {
-		conn, err := server.Server.Accept()
-		if err != nil {
-			break
-		}
-		go server.ConnectMessenger(conn)
-	}
+	go server.WaitForExitCommand()
 
+	go func() {
+		for {
+			conn, err := server.Server.Accept()
+			if err != nil {
+				break
+			}
+			go server.ConnectMessenger(conn)
+		}
+	}()
+
+	<-server.ShutdownChan
 	server.CloseServer()
 }
 
