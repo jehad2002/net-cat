@@ -196,7 +196,7 @@ func (s *Server) WaitForExitCommand() {
 	for {
 		command, _ := reader.ReadString('\n')
 		if strings.TrimSpace(command) == "exit" {
-			s.ShutdownChan <- true
+			close(s.ShutdownChan)
 			return
 		}
 	}
