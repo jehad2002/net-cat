@@ -143,6 +143,8 @@
 // }
 
 // func (s *Server) loadMessages(conn net.Conn) {
+// 	s.mutex <- struct{}{}
+// 	defer func() { <-s.mutex }()
 // 	for _, message := range s.AllMessages {
 // 		fmt.Fprint(conn, message)
 // 	}
@@ -177,15 +179,16 @@
 
 // func (s *Server) changeUserName(conn net.Conn, newName string) {
 // 	s.mutex <- struct{}{}
-// 	defer func() { <-s.mutex }()
 // 	if newName == "" || s.UsedNames[newName] {
+// 		<-s.mutex
 // 		fmt.Fprint(conn, "Name is either empty or already in use.\n")
 // 		return
 // 	}
 // 	oldName := s.Connections[conn]
-// 	delete(s.UsedNames, oldName)
 // 	s.UsedNames[newName] = true
 // 	s.Connections[conn] = newName
+// 	delete(s.UsedNames, oldName)
+// 	<-s.mutex
 // 	log.Printf("%s changed their name to %s\n", oldName, newName)
 // 	message := fmt.Sprintf("%s changed their name to %s\n", oldName, newName)
 // 	s.sendMessage(conn, message)
@@ -233,7 +236,7 @@
 // 	return ":" + args[1]
 // }
 
-//================================change name====================================
+//==================================try=================================
 
 package main
 
@@ -442,6 +445,27 @@ func (s *Server) WaitForExitCommand() {
 	}
 }
 
+func (s *Server) PrintAllMessages() {
+	s.mutex <- struct{}{}
+	defer func() { <-s.mutex }()
+	for _, message := range s.AllMessages {
+		fmt.Println(message)
+	}
+}
+
+func (s *Server) PeriodicallyPrintMessages() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.PrintAllMessages()
+		case <-s.ShutdownChan:
+			return
+		}
+	}
+}
+
 func main() {
 	port := GetPort()
 	server := &Server{}
@@ -459,6 +483,8 @@ func main() {
 			go server.ConnectMessenger(conn)
 		}
 	}()
+
+	go server.PeriodicallyPrintMessages()
 
 	<-server.ShutdownChan
 	server.CloseServer()
