@@ -238,7 +238,6 @@
 
 // ==================================try=================================
 
-
 package main
 
 import (
@@ -446,21 +445,23 @@ func (s *Server) WaitForExitCommand() {
 	}
 }
 
-func (s *Server) PrintAllMessages() {
+func (s *Server) PrintAllMessages(lastIndex *int) {
 	s.mutex <- struct{}{}
 	defer func() { <-s.mutex }()
-	for _, message := range s.AllMessages {
-		fmt.Println(message)
+	for i := *lastIndex; i < len(s.AllMessages); i++ {
+		fmt.Println(s.AllMessages[i])
 	}
+	*lastIndex = len(s.AllMessages)
 }
 
 func (s *Server) PeriodicallyPrintMessages() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+	lastIndex := 0
 	for {
 		select {
 		case <-ticker.C:
-			s.PrintAllMessages()
+			s.PrintAllMessages(&lastIndex)
 		case <-s.ShutdownChan:
 			return
 		}
